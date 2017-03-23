@@ -9,26 +9,28 @@
 #define POS_FIVE 5
 #define POS_NULL 0
 
-#define MAX_AGITATION 1000
+#define MAX_AGITATION 100
 #define MIN_AGITATION 10
 #define MIN_SERVO_PERIOD 1
 #define MAX_SERVO_PERIOD 30
 #define SERVO_PERIOD_NOISE 3
+#define SHADOW_CHANGE_THRESHOLD 5
 
 
 static int PIN_IDS[3] = {A0, A1, A2};
 static int photoArray[3];
 static int baseline[3];
-static int sigma[3] = {10, 10, 10};
+static int sigma[3] = {SHADOW_CHANGE_THRESHOLD, SHADOW_CHANGE_THRESHOLD, SHADOW_CHANGE_THRESHOLD};
 static bool shadow[3] = {false, false, false};
 static int handPos;
 static int handVel;
 
 static int framesSinceLastUpdate = 0;
-static int framesBetweenUpdate = 360;
+static int framesBetweenUpdate = 100;
 
 static int agitation = MIN_AGITATION;
 
+// TODO: class these
 Servo servoA;
 static int servoAPin = 3;
 static int servoAPos = 0;
@@ -60,18 +62,23 @@ void setup() {
 }
 
 /* utils */
-bool arrAreEqual(int* arr1, int* arr2) {
-    FOR_EVERY_PIN {
-        if (arr1[i] != arr2[i]) {
-            return false;
-        }
-    }
-    return true;
-}
 
 void printArray(int* arr) {
     FOR_EVERY_PIN {
         Serial.print(arr[i]);
+        Serial.print(' ');
+    }
+    Serial.println();
+}
+
+void printShadowArray() {
+    FOR_EVERY_PIN {
+        if (shadow[i]) {
+          Serial.print('X');
+
+        } else {
+          Serial.print('_');
+        }
         Serial.print(' ');
     }
     Serial.println();
@@ -118,13 +125,27 @@ void updateHand() {
     handPos = newHandPos;
 }
 
+bool anyHand() {
+  FOR_EVERY_PIN {
+    if (shadow[i]) {
+      return true;
+    }
+  }
+  return false;
+}
+
 void updateAgitation() {
+
+
     if (handVel == 1) {
-        agitation -= 200;
+        agitation -= 10;
     } else if (handVel == 2 || handVel == 3) {
-        agitation -= 160;
+        agitation -= 6;
+    }
+    if (anyHand()) {
+      agitation += 1;
     } else {
-        agitation += 30;
+      agitation += 3;
     }
     agitation = constrain(agitation, MIN_AGITATION, MAX_AGITATION);
 }
@@ -143,6 +164,7 @@ void updateServoSpeeds() {
 void loop() {
     updateServoSpeeds();
 
+
     framesSinceLastUpdate += 1;
     if (framesSinceLastUpdate >= framesBetweenUpdate) {
         updatePhotoArray();
@@ -150,7 +172,16 @@ void loop() {
         updateHand();
         updateAgitation();
         framesSinceLastUpdate = 0;
+
+        Serial.print("baseline: ");
+        printArray(baseline);
+        Serial.print("photo: ");
+        printArray(photoArray);
+        Serial.print("shadow: ");
+        printShadowArray();
+        Serial.print("agitation: ");
         Serial.println(agitation);
+        Serial.println();
     }
 
     servoAFramesSinceLastMove += 1;
